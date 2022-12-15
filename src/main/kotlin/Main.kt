@@ -214,7 +214,10 @@ class Automaton : Closeable {
      */
     private fun printFinalStateChangePath() {
         /** one path in accepting state, get its path as string **/
-        val path = _paths.maxBy(List<Int>::last).joinToString(separator = "→", transform = { "q$it" })
+        val path = _paths
+            .sortedByDescending(List<Int>::sum)
+            .maxBy(List<Int>::last)
+            .joinToString(separator = "→", transform = { "q$it" })
         println("State change path: $path")
     }
 
