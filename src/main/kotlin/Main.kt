@@ -83,9 +83,14 @@ class Automaton : Closeable {
     }
 
     /**
-     * Map of symbols with number of their read occurences
+     * Map of symbols with number of their temporary read occurences
      */
-    private val _occurrences = mutableMapOf<Symbol, Int>()
+    private val _tempOccurrences = mutableMapOf<Symbol, Int>()
+
+    /**
+     * Map of symbols with number of their triplet occurences
+     */
+    private val _tripletOccurrences = mutableMapOf<Symbol, Int>()
 
     /**
      * Representation of state paths
@@ -100,13 +105,13 @@ class Automaton : Closeable {
     private var onHold = false
 
     init {
-        printStates()
+        printCurrentStates()
     }
 
     /**
      * Consumes symbols and transitions to next states if applicable
      */
-    fun consume(symbol: Symbol): Boolean {
+    fun consume(symbol: Symbol) {
         /**
          * Get next state from transition table
          */
@@ -122,38 +127,52 @@ class Automaton : Closeable {
         /**
          * Increments occurrence of specific symbol
          */
-        fun incrementOccurrence() = _occurrences.merge(symbol, 1) { a: Int, b: Int -> a + b }
+        fun incrementOccurrence() {
+            /**
+             * Utility function to increment value of specific map key
+             */
+            fun MutableMap<Symbol, Int>.incrementCurrent() = merge(symbol, 1) { a: Int, b: Int -> a + b }
+
+            /** clear temporary counter of other symbols, increment counter and triplet occurrences for current one **/
+            with (_tempOccurrences) {
+                entries.removeIf { it.key != symbol }
+                incrementCurrent()
+                get(symbol)?.takeIf { it >= 3 }?.let {
+                    _tripletOccurrences.incrementCurrent()
+                }
+            }
+        }
 
         /**
-         * Increments occurrence of specific symbol
+         * Prints information about how many times symbol was tripled
          */
-        fun printOccurrences() = println("Symbol $this occurred ${_occurrences[symbol]} times already")
+        fun printOccurrences() = _tripletOccurrences.forEach { (symbol, occurrences) ->
+            println("Symbol $symbol was tripled $occurrences times already")
+        }
 
         /**
          * Updates state paths
-         *
-         * @return boolean if current state is accepting or rejecting
          */
-        fun List<List<Int>>.updatePaths() = ifEmpty { onHold = true; this }
-            .takeIf { it.isNotEmpty() && it != _paths }
+        fun List<List<Int>>.updatePaths() = ifEmpty { onHold = true; null }
+            ?.takeIf { !onHold }
             ?.let {
                 _paths = this
                 incrementOccurrence()
-                true
-            } == true
+            }
 
         println("Reading symbol: $symbol")
 
-        /** perform actual state transition **/
-        return _paths.takeIf { !onHold }
+        /** perform state transition, print current states and symbol occurrences if automaton is in accepted state **/
+        _paths.takeIf { !onHold }
             ?.map(List<Int>::nextState)
             ?.flatten()
             ?.filterNot(List<Int>::isEmpty)
+            ?.updatePaths()
+            ?.let { !onHold && isAccepting() }
             ?.run {
-                val comp = updatePaths()
-                printStates()
-                !comp && isAccepting()
-            }?.also { if (it) printOccurrences() } == true
+                if (this) printOccurrences()
+                printCurrentStates()
+            }
     }
 
     /**
@@ -175,14 +194,18 @@ class Automaton : Closeable {
     /**
      * Prints current states
      */
-    private fun printStates() = println("Current automaton states: ${lastStates().asString()}")
+    private fun printCurrentStates() = println("Current automaton states: ${lastStates().asString()}")
 
     /**
      * Prints final state
      *
      * (max state of last ones)
      */
-    private fun printFinalState() = println("Final automaton state: q${lastStates().max()}")
+    private fun printFinalState() {
+        val state = lastStates().max()
+        val label = if (acceptingStates.contains(state)) "accepting" else "rejecting"
+        println("Final automaton state: q$state ($label)")
+    }
 
     /**
      * Prints state change path
