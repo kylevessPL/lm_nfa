@@ -68,18 +68,23 @@ class Automaton : Closeable {
          */
         @JvmField
         val transitionTable = mapOf(
-            Pair(0, ZERO) to setOf(0, 1), Pair(0, ONE) to setOf(0, 1), Pair(0, TWO) to setOf(0, 1), Pair(0, THREE) to setOf(0),
-            Pair(1, ZERO) to emptySet(), Pair(1, ONE) to setOf(2), Pair(1, TWO) to setOf(2), Pair(1, THREE) to setOf(2),
-            Pair(2, ZERO) to setOf(2), Pair(2, ONE) to setOf(2), Pair(2, TWO) to setOf(2, 3), Pair(2, THREE) to setOf(2, 3),
-            Pair(3, ZERO) to setOf(3), Pair(3, ONE) to setOf(3), Pair(3, TWO) to setOf(3), Pair(3, THREE) to setOf(3, 4),
-            Pair(4, ZERO) to setOf(4), Pair(4, ONE) to setOf(4), Pair(4, TWO) to setOf(4), Pair(4, THREE) to setOf(4)
+            Pair(0, ZERO) to setOf(0, 1), Pair(0, ONE) to setOf(0, 2), Pair(0, TWO) to setOf(0, 3), Pair(0, THREE) to setOf(0, 4),
+            Pair(1, ZERO) to setOf(5), Pair(1, ONE) to emptySet(), Pair(1, TWO) to emptySet(), Pair(1, THREE) to emptySet(),
+            Pair(2, ZERO) to emptySet(), Pair(2, ONE) to setOf(6), Pair(2, TWO) to emptySet(), Pair(2, THREE) to emptySet(),
+            Pair(3, ZERO) to emptySet(), Pair(3, ONE) to emptySet(), Pair(3, TWO) to setOf(7), Pair(3, THREE) to emptySet(),
+            Pair(4, ZERO) to emptySet(), Pair(4, ONE) to emptySet(), Pair(4, TWO) to emptySet(), Pair(4, THREE) to setOf(8),
+            Pair(5, ZERO) to setOf(9), Pair(5, ONE) to emptySet(), Pair(5, TWO) to emptySet(), Pair(5, THREE) to emptySet(),
+            Pair(6, ZERO) to emptySet(), Pair(6, ONE) to setOf(9), Pair(6, TWO) to emptySet(), Pair(6, THREE) to emptySet(),
+            Pair(7, ZERO) to emptySet(), Pair(7, ONE) to emptySet(), Pair(7, TWO) to setOf(9), Pair(7, THREE) to emptySet(),
+            Pair(8, ZERO) to emptySet(), Pair(8, ONE) to emptySet(), Pair(8, TWO) to emptySet(), Pair(8, THREE) to setOf(9),
+            Pair(9, ZERO) to setOf(9), Pair(9, ONE) to setOf(9), Pair(9, TWO) to setOf(9), Pair(9, THREE) to setOf(9)
         )
 
         /**
          * Set of accepted states
          */
         @JvmField
-        val acceptingStates = setOf(2, 3, 4)
+        val acceptingStates = setOf(9)
     }
 
     /**
@@ -134,7 +139,7 @@ class Automaton : Closeable {
             fun MutableMap<Symbol, Int>.incrementCurrent() = merge(symbol, 1) { a: Int, b: Int -> a + b }
 
             /** clear temporary counter of other symbols, increment counter and triplet occurrences for current one **/
-            with (_tempOccurrences) {
+            with(_tempOccurrences) {
                 entries.removeIf { it.key != symbol }
                 incrementCurrent()
                 get(symbol)?.takeIf { it >= 3 }?.let {
@@ -202,7 +207,7 @@ class Automaton : Closeable {
      * (max state of last ones)
      */
     private fun printFinalState() {
-        val state = lastStates().max()
+        val state = lastStates().maxOrNull()
         val label = if (acceptingStates.contains(state)) "accepting" else "rejecting"
         println("Final automaton state: q$state ($label)")
     }
@@ -216,8 +221,8 @@ class Automaton : Closeable {
         /** one path in accepting state, get its path as string **/
         val path = _paths
             .sortedByDescending(List<Int>::sum)
-            .maxBy(List<Int>::last)
-            .joinToString(separator = "→", transform = { "q$it" })
+            .maxByOrNull(List<Int>::last)
+            ?.joinToString(separator = "→", transform = { "q$it" })
         println("State change path: $path")
     }
 
@@ -235,12 +240,16 @@ class Automaton : Closeable {
 
 /**
  * Reads file from resources directory, splits by separator and runs automaton for each token character
+ *
+ * How to use: place text file in src/main/resources folder with words to read separated by # character
+ *
+ * Sample file content: 2213#33002012#23122#003#3333233#1222311
  */
 fun main() {
     print("Please enter filename from resources directory: ")
     Scanner(System.`in`).use { scanner ->
         val filename = scanner.next()
-        object{}::class.java.getResource(filename)
+        object {}::class.java.getResource(filename)
             ?.readText()
             ?.split(TOKEN_SEPARATOR)
             ?.map(String::trim)
