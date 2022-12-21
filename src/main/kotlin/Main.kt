@@ -4,13 +4,22 @@
  * difficulty level: 3
  */
 
+import Automaton.Companion.transitionTableMatrix
 import Symbol.ONE
 import Symbol.THREE
 import Symbol.TWO
 import Symbol.ZERO
+import TransitionTablePrinter.print
 import java.io.Closeable
+import java.io.File
 import java.lang.System.lineSeparator
+import java.net.URL
 import java.util.Scanner
+
+/**
+ * Type alias for transition table row
+ */
+typealias Row = Map.Entry<Pair<Int, Symbol>, Set<Int>>
 
 /**
  * Token separator
@@ -52,13 +61,72 @@ enum class Symbol(private val value: Any) {
 }
 
 /**
+ * Utility class to print transition table of an automaton
+ */
+object TransitionTablePrinter {
+    private const val HORIZONTAL_BORDER_KNOT = "+"
+    private const val HORIZONTAL_BORDER_PATTERN = "-"
+    private const val VERTICAL_BORDER_PATTERN = "|"
+
+    /**
+     * Pretty-prints transition table of an automaton (2D array)
+     */
+    fun Array<Array<String>>.print() = takeIf { isNotEmpty() }?.let {
+        val numberOfColumns = maxOfOrNull(Array<String>::size) ?: 0
+        val maxColumnWidth = flatten().maxOfOrNull(String::length) ?: 0
+        val horizontalBorder = createHorizontalBorder(numberOfColumns, maxColumnWidth)
+        println(horizontalBorder)
+        forEach { row ->
+            println(row.asString(maxColumnWidth))
+            println(horizontalBorder)
+        }
+    } ?: Unit
+
+    /**
+     * Converts row to pretty-printed string
+     */
+    private fun Array<String>.asString(width: Int) = VERTICAL_BORDER_PATTERN.plus(joinToString("") {
+        padCell(it, width)
+    })
+
+    /**
+     * Creates horizontal border for a row
+     */
+    private fun createHorizontalBorder(numberOfColumns: Int, width: Int) =
+        HORIZONTAL_BORDER_KNOT + HORIZONTAL_BORDER_PATTERN
+            .repeat(width)
+            .plus(HORIZONTAL_BORDER_KNOT)
+            .repeat(numberOfColumns)
+
+    /**
+     * Pads cell left to particular length
+     */
+    private fun padCell(text: String, length: Int) = text.padStart(length).plus(VERTICAL_BORDER_PATTERN)
+}
+
+/**
  * Actual implementation of NFA
  */
 class Automaton : Closeable {
     /**
      * Companion object containing static fields
      */
-    private companion object {
+    companion object {
+        /**
+         * Delta character of transition function
+         */
+        private const val DELTA_CHARACTER = "δ"
+
+        /**
+         * No-op character for no transition
+         */
+        private const val NOOP_CHARACTER = "✕"
+
+        /**
+         * Set of accepted states
+         */
+        private val acceptingStates = setOf(9)
+
         /**
          * Transition table representation as a key-value map
          *
@@ -66,8 +134,7 @@ class Automaton : Closeable {
          *
          * Value – next state
          */
-        @JvmField
-        val transitionTable = mapOf(
+        private val transitionTable = mapOf(
             Pair(0, ZERO) to setOf(0, 1), Pair(0, ONE) to setOf(0, 2), Pair(0, TWO) to setOf(0, 3), Pair(0, THREE) to setOf(0, 4),
             Pair(1, ZERO) to setOf(5), Pair(1, ONE) to emptySet(), Pair(1, TWO) to emptySet(), Pair(1, THREE) to emptySet(),
             Pair(2, ZERO) to emptySet(), Pair(2, ONE) to setOf(6), Pair(2, TWO) to emptySet(), Pair(2, THREE) to emptySet(),
@@ -81,10 +148,37 @@ class Automaton : Closeable {
         )
 
         /**
-         * Set of accepted states
+         * Gets states as comma-separated string
+         */
+        private fun Collection<Int>.asString(): String {
+            /** if empty or contains only one state, do not use prefix and postfix **/
+            val emptyOrSingleton = isEmpty() || size == 1
+            val prefix = if (!emptyOrSingleton) "{" else ""
+            val postfix = if (!emptyOrSingleton) "}" else ""
+            return joinToString(prefix = prefix, postfix = postfix, transform = { "q$it" })
+        }
+
+        /**
+         * Representation of transition table as 2D array
          */
         @JvmField
-        val acceptingStates = setOf(9)
+        val transitionTableMatrix = run {
+            fun List<Row>.mapRows() = (listOf(listOf(first().key.first)) + map(Row::value))
+                .map { it.asString() }
+                .map { it.ifEmpty { NOOP_CHARACTER } }
+                .toTypedArray()
+
+            val header = (listOf(DELTA_CHARACTER) + transitionTable.keys
+                .map(Pair<Int, Symbol>::second)
+                .map(Symbol::toString)
+                .distinct())
+                .toTypedArray()
+            val rows = transitionTable.entries
+                .chunked(4)
+                .map(List<Row>::mapRows)
+                .toTypedArray()
+            arrayOf(header).plus(rows)
+        }
     }
 
     /**
@@ -225,31 +319,19 @@ class Automaton : Closeable {
             ?.joinToString(separator = "→", transform = { "q$it" })
         println("State change path: $path")
     }
-
-    /**
-     * Gets states as comma-separated string
-     */
-    private fun Collection<Int>.asString(): String {
-        /** if empty or contains only one state, do not use prefix and postfix **/
-        val emptyOrSingleton = isEmpty() || size == 1
-        val prefix = if (!emptyOrSingleton) "{" else ""
-        val postfix = if (!emptyOrSingleton) "}" else ""
-        return joinToString(prefix = prefix, postfix = postfix, transform = { "q$it" })
-    }
 }
 
 /**
- * Reads file from resources directory, splits by separator and runs automaton for each token character
+ * Reads file from user-defined directory, splits by separator and runs automaton for each token character
  *
- * How to use: place text file in src/main/resources folder with words to read separated by # character
- *
- * Sample file content: 2213#33002012#23122#003#3333233#1222311
  */
 fun main() {
-    print("Please enter filename from resources directory: ")
+    println("Transition table:")
+    transitionTableMatrix.print()
+    print("Please enter file path: ")
     Scanner(System.`in`).use { scanner ->
-        val filename = scanner.next()
-        object {}::class.java.getResource(filename)
+        val filepath = scanner.next()
+        File(filepath).takeIf { it.isFile }
             ?.readText()
             ?.split(TOKEN_SEPARATOR)
             ?.map(String::trim)
@@ -267,6 +349,6 @@ fun main() {
                         }
                     }
                 }
-            } ?: println("File not found, is not readable or has not content")
+            } ?: println("File not found, is not readable or has no content")
     }
 }
