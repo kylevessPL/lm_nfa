@@ -13,7 +13,6 @@ import TransitionTablePrinter.print
 import java.io.Closeable
 import java.io.File
 import java.lang.System.lineSeparator
-import java.net.URL
 import java.util.Scanner
 
 /**
